@@ -24,6 +24,7 @@ udp_receive() ->
 udp_receive(Socket) ->
   {ok,{_Address, _Port, Node_name}} = gen_udp:recv(Socket, 0),
   Node = list_to_atom(Node_name),
+  io:fwrite(Node_name),
   case is_in_cluster(Node) of
     true ->
       udp_receive(Socket),
@@ -53,12 +54,21 @@ is_in_cluster(Node) ->
   lists:member(Node, Node_list).
 
 node_init(Node_type_list) ->
+  os:cmd("epmd -daemon"), % start epmd as daemon in case it's not running
+  timer:sleep(100), % give epmd some time to start
   %% Generate node name %%
   {ok, [{IP_tuple,_,_}|_]} = inet:getif(),
 
   %% Initialize node with "password protection" %%
   Node_name = Node_type_list++"@"++integer_to_list(element(1,IP_tuple))++"."++integer_to_list(element(2, IP_tuple))++"."++integer_to_list(element(3, IP_tuple))++"."++integer_to_list(element(4, IP_tuple)),
+
+  %register(nameman, spawn(fun() -> name_manager(Node_name) end)),
   net_kernel:start([list_to_atom(Node_name), longnames]),
   erlang:set_cookie(node(), 'robert-og-dino').
 
+name_manager(Node_name) ->
+  receive {get_name, PID} ->
+    PID ! {node_name, Node_name}
+  end,
+  name_manager(Node_name).
 
